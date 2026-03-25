@@ -36,7 +36,7 @@ export default function Calendar() {
   const [events, setEvents] = useState<CalendarEvent[]>([]);
   const [weekStart, setWeekStart] = useState(startOfWeek(new Date(), { weekStartsOn: 1 }));
   const [open, setOpen] = useState(false);
-  const [newEvent, setNewEvent] = useState({ title: "", date: "", type: "assignment" as const });
+  const [newEvent, setNewEvent] = useState<{ title: string; date: string; type: "exam" | "assignment" }>({ title: "", date: "", type: "assignment" });
 
   const fetchEvents = async () => {
     if (!user) return;
