@@ -14,7 +14,213 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      assignments: {
+        Row: {
+          completed: boolean | null
+          created_at: string
+          due_date: string
+          estimated_hours: number | null
+          id: string
+          name: string
+          priority: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          completed?: boolean | null
+          created_at?: string
+          due_date: string
+          estimated_hours?: number | null
+          id?: string
+          name: string
+          priority?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          completed?: boolean | null
+          created_at?: string
+          due_date?: string
+          estimated_hours?: number | null
+          id?: string
+          name?: string
+          priority?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      exams: {
+        Row: {
+          created_at: string
+          difficulty: string
+          exam_date: string
+          id: string
+          name: string
+          subject: string
+          updated_at: string
+          user_id: string
+          weight: number | null
+        }
+        Insert: {
+          created_at?: string
+          difficulty?: string
+          exam_date: string
+          id?: string
+          name: string
+          subject: string
+          updated_at?: string
+          user_id: string
+          weight?: number | null
+        }
+        Update: {
+          created_at?: string
+          difficulty?: string
+          exam_date?: string
+          id?: string
+          name?: string
+          subject?: string
+          updated_at?: string
+          user_id?: string
+          weight?: number | null
+        }
+        Relationships: []
+      }
+      focus_sessions: {
+        Row: {
+          completed: boolean | null
+          created_at: string
+          duration_minutes: number | null
+          end_time: string | null
+          id: string
+          start_time: string
+          user_id: string
+        }
+        Insert: {
+          completed?: boolean | null
+          created_at?: string
+          duration_minutes?: number | null
+          end_time?: string | null
+          id?: string
+          start_time?: string
+          user_id: string
+        }
+        Update: {
+          completed?: boolean | null
+          created_at?: string
+          duration_minutes?: number | null
+          end_time?: string | null
+          id?: string
+          start_time?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      notifications: {
+        Row: {
+          created_at: string
+          id: string
+          message: string
+          read: boolean | null
+          type: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          message: string
+          read?: boolean | null
+          type?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          message?: string
+          read?: boolean | null
+          type?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      profiles: {
+        Row: {
+          avatar_url: string | null
+          created_at: string
+          display_name: string | null
+          id: string
+          study_streak: number | null
+          total_study_hours: number | null
+          updated_at: string
+        }
+        Insert: {
+          avatar_url?: string | null
+          created_at?: string
+          display_name?: string | null
+          id: string
+          study_streak?: number | null
+          total_study_hours?: number | null
+          updated_at?: string
+        }
+        Update: {
+          avatar_url?: string | null
+          created_at?: string
+          display_name?: string | null
+          id?: string
+          study_streak?: number | null
+          total_study_hours?: number | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      study_sessions: {
+        Row: {
+          assignment_id: string | null
+          completed: boolean | null
+          created_at: string
+          date: string
+          duration_minutes: number
+          exam_id: string | null
+          id: string
+          user_id: string
+        }
+        Insert: {
+          assignment_id?: string | null
+          completed?: boolean | null
+          created_at?: string
+          date?: string
+          duration_minutes?: number
+          exam_id?: string | null
+          id?: string
+          user_id: string
+        }
+        Update: {
+          assignment_id?: string | null
+          completed?: boolean | null
+          created_at?: string
+          date?: string
+          duration_minutes?: number
+          exam_id?: string | null
+          id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "study_sessions_assignment_id_fkey"
+            columns: ["assignment_id"]
+            isOneToOne: false
+            referencedRelation: "assignments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "study_sessions_exam_id_fkey"
+            columns: ["exam_id"]
+            isOneToOne: false
+            referencedRelation: "exams"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
