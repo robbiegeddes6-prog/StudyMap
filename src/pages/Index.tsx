@@ -1,16 +1,37 @@
-// Update this page (the content is just a fallback if you fail to update the page)
+import { DashboardLayout } from "@/components/DashboardLayout";
+import { StatsRow } from "@/components/dashboard/StatsRow";
+import { TodaySchedule } from "@/components/dashboard/TodaySchedule";
+import { PressureMap } from "@/components/dashboard/PressureMap";
+import { ReadinessCards } from "@/components/dashboard/ReadinessCards";
+import { StartNowButton } from "@/components/dashboard/StartNowButton";
+import { QuickInput } from "@/components/dashboard/QuickInput";
 
-// IMPORTANT: Fully REPLACE this with your own code
-const PlaceholderIndex = () => {
-  // PLACEHOLDER: Replace this entire return statement with the user's app.
-  // The inline background color is intentionally not part of the design system.
+const Index = () => {
   return (
-    <div className="flex min-h-screen items-center justify-center" style={{ backgroundColor: '#fcfbf8' }}>
-      <img data-lovable-blank-page-placeholder="REMOVE_THIS" src="/placeholder.svg" alt="Your app will live here!" />
-    </div>
+    <DashboardLayout>
+      <div className="max-w-7xl mx-auto space-y-6">
+        <div>
+          <h1 className="text-2xl font-bold text-foreground">Dashboard</h1>
+          <p className="text-sm text-muted-foreground mt-1">Your study overview for today</p>
+        </div>
+
+        <StatsRow />
+
+        <QuickInput />
+
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div className="lg:col-span-2 space-y-6">
+            <TodaySchedule />
+            <PressureMap />
+          </div>
+          <div className="space-y-6">
+            <StartNowButton />
+            <ReadinessCards />
+          </div>
+        </div>
+      </div>
+    </DashboardLayout>
   );
 };
-
-const Index = PlaceholderIndex;
 
 export default Index;
