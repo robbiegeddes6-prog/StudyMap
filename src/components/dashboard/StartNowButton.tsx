@@ -3,32 +3,45 @@ import { Play, Pause, Square, Timer } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "sonner";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/hooks/useAuth";
+
+const POMODORO_DURATION = 25 * 60;
 
 export function StartNowButton() {
+  const { user } = useAuth();
   const [isActive, setIsActive] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
-  const [seconds, setSeconds] = useState(25 * 60);
+  const [seconds, setSeconds] = useState(POMODORO_DURATION);
+  const [sessionId, setSessionId] = useState<string | null>(null);
 
   useEffect(() => {
-    let interval: ReturnType<typeof setInterval>;
+    let interval: ReturnType<typeof setInterval> | undefined;
     if (isActive && !isPaused) {
       interval = setInterval(() => {
         setSeconds((s) => {
           if (s <= 1) {
+            clearInterval(interval);
             setIsActive(false);
+            setIsPaused(false);
             toast.success("Focus session complete! Great work 🎉");
-            return 25 * 60;
-          }
-          // Burnout detection: >3 hours
-          if (25 * 60 - s >= 180 * 60) {
-            toast.warning("You've been studying for a while. Take a break!");
+            // Save completed session
+            if (user && sessionId) {
+              supabase.from("focus_sessions").update({
+                end_time: new Date().toISOString(),
+                duration_minutes: POMODORO_DURATION / 60,
+                completed: true,
+              }).eq("id", sessionId).then(() => {});
+            }
+            setSessionId(null);
+            return POMODORO_DURATION;
           }
           return s - 1;
         });
       }, 1000);
     }
-    return () => clearInterval(interval);
-  }, [isActive, isPaused]);
+    return () => { if (interval) clearInterval(interval); };
+  }, [isActive, isPaused, user, sessionId]);
 
   const formatTime = useCallback((s: number) => {
     const m = Math.floor(s / 60);
@@ -36,7 +49,34 @@ export function StartNowButton() {
     return `${m.toString().padStart(2, "0")}:${sec.toString().padStart(2, "0")}`;
   }, []);
 
-  const progress = ((25 * 60 - seconds) / (25 * 60)) * 100;
+  const startSession = async () => {
+    setSeconds(POMODORO_DURATION);
+    setIsActive(true);
+    setIsPaused(false);
+    if (user) {
+      const { data } = await supabase.from("focus_sessions").insert({
+        user_id: user.id,
+        start_time: new Date().toISOString(),
+      }).select("id").single();
+      if (data) setSessionId(data.id);
+    }
+  };
+
+  const stopSession = () => {
+    setIsActive(false);
+    setIsPaused(false);
+    setSeconds(POMODORO_DURATION);
+    if (user && sessionId) {
+      supabase.from("focus_sessions").update({
+        end_time: new Date().toISOString(),
+        duration_minutes: Math.floor((POMODORO_DURATION - seconds) / 60),
+        completed: false,
+      }).eq("id", sessionId).then(() => {});
+    }
+    setSessionId(null);
+  };
+
+  const progress = ((POMODORO_DURATION - seconds) / POMODORO_DURATION) * 100;
 
   if (!isActive) {
     return (
@@ -50,11 +90,7 @@ export function StartNowButton() {
         </div>
         <h3 className="text-lg font-semibold text-foreground mb-1">Ready to focus?</h3>
         <p className="text-sm text-muted-foreground mb-4">Start a 25-minute Pomodoro session</p>
-        <Button
-          size="lg"
-          onClick={() => { setIsActive(true); setIsPaused(false); setSeconds(25 * 60); }}
-          className="gap-2"
-        >
+        <Button size="lg" onClick={startSession} className="gap-2">
           <Play className="w-4 h-4" />
           Start Now
         </Button>
@@ -69,7 +105,6 @@ export function StartNowButton() {
         animate={{ scale: 1, opacity: 1 }}
         className="studymap-card-elevated flex flex-col items-center justify-center py-8 relative overflow-hidden"
       >
-        {/* Progress ring background */}
         <div className="absolute inset-0 opacity-5" style={{ background: "var(--gradient-primary)" }} />
 
         <div className="relative mb-4">
@@ -111,7 +146,7 @@ export function StartNowButton() {
           <Button
             variant="outline"
             size="sm"
-            onClick={() => { setIsActive(false); setSeconds(25 * 60); }}
+            onClick={stopSession}
             className="gap-1 text-destructive hover:text-destructive"
           >
             <Square className="w-3.5 h-3.5" />
