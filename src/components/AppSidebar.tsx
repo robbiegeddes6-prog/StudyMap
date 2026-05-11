@@ -29,6 +29,7 @@ const mainItems = [
   { title: "Calendar", url: "/calendar", icon: CalendarDays },
   { title: "Exams", url: "/exams", icon: GraduationCap },
   { title: "Assignments", url: "/assignments", icon: ClipboardList },
+  { title: "Study", url: "/study", icon: BookOpen },
   { title: "Friends", url: "/friends", icon: Users },
   { title: "Analytics", url: "/analytics", icon: BarChart3 },
   { title: "Settings", url: "/settings", icon: Settings },

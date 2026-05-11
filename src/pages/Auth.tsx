@@ -1,6 +1,5 @@
 import { useState } from "react";
 import { Navigate } from "react-router-dom";
-import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -10,7 +9,7 @@ import { BookOpen, Sparkles } from "lucide-react";
 import { motion } from "framer-motion";
 
 const Auth = () => {
-  const { session, loading } = useAuth();
+  const { session, loading, signIn, signUp } = useAuth();
   const [isLogin, setIsLogin] = useState(true);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -25,24 +24,23 @@ const Auth = () => {
     setSubmitting(true);
 
     try {
+      console.log('🔐 Attempting authentication...', { isLogin, email });
+
       if (isLogin) {
-        const { error } = await supabase.auth.signInWithPassword({ email, password });
-        if (error) throw error;
+        console.log('📧 Signing in...');
+        await signIn(email.trim(), password);
+        console.log('✅ Sign in successful');
         toast.success("Welcome back!");
       } else {
-        const { error } = await supabase.auth.signUp({
-          email,
-          password,
-          options: {
-            data: { display_name: displayName },
-            emailRedirectTo: window.location.origin,
-          },
-        });
-        if (error) throw error;
-        toast.success("Account created! Check your email to confirm.");
+        console.log('📧 Signing up...');
+        await signUp(email.trim(), password, displayName.trim());
+        console.log('✅ Sign up successful');
+        toast.success("Account created! Welcome!");
       }
-    } catch (err: any) {
-      toast.error(err.message);
+    } catch (err) {
+      console.error("❌ Auth error:", err);
+      const errorMessage = (err as Error)?.message || "An error occurred";
+      toast.error(`Authentication failed: ${errorMessage}`);
     } finally {
       setSubmitting(false);
     }

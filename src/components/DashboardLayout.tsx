@@ -16,7 +16,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
             <div className="flex items-center gap-2">
               <SidebarTrigger />
               <span className="text-sm text-muted-foreground hidden sm:inline">
-                Welcome back, <span className="text-foreground font-medium">{user?.user_metadata?.display_name || user?.email?.split("@")[0]}</span>
+                Welcome back, <span className="text-foreground font-medium">{user?.display_name || user?.email?.split("@")[0]}</span>
               </span>
             </div>
             <div className="flex items-center gap-2">
