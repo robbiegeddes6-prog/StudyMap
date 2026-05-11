@@ -3,37 +3,27 @@ import { createClient, SupabaseClient } from '@supabase/supabase-js'
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY
 
-console.log('🔧 SUPABASE CLIENT INITIALIZATION')
-console.log('VITE_SUPABASE_URL:', import.meta.env.VITE_SUPABASE_URL)
-console.log('VITE_SUPABASE_ANON_KEY exists:', !!import.meta.env.VITE_SUPABASE_ANON_KEY)
-console.log('All env vars:', Object.keys(import.meta.env).filter(key => key.startsWith('VITE_')))
-console.log('SUPABASE URL:', supabaseUrl)
-console.log('SUPABASE KEY:', supabaseAnonKey ? '***' + supabaseAnonKey.slice(-4) : 'MISSING')
-
 if (!supabaseUrl || !supabaseAnonKey) {
-  throw new Error('Missing Supabase environment variables: VITE_SUPABASE_URL and/or VITE_SUPABASE_ANON_KEY')
+  throw new Error(
+    'Missing required environment variables: VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY. ' +
+    'Set them in your .env file locally, or in your hosting platform dashboard for production.'
+  )
 }
 
-// Prevent duplicate client creation during hot reload
-let supabaseClient: SupabaseClient | undefined
-
+// Reuse the client across hot reloads in development
 declare global {
-  interface Window {
-    __SUPABASE_CLIENT__?: SupabaseClient
-  }
+  interface Window { __SUPABASE_CLIENT__?: SupabaseClient }
 }
+
+let supabaseClient: SupabaseClient
 
 if (typeof window !== 'undefined' && window.__SUPABASE_CLIENT__) {
-  console.log('🔄 Reusing existing Supabase client (hot reload)')
   supabaseClient = window.__SUPABASE_CLIENT__
 } else {
-  console.log('✅ Creating new Supabase client with URL:', supabaseUrl)
   supabaseClient = createClient(supabaseUrl, supabaseAnonKey)
   if (typeof window !== 'undefined') {
     window.__SUPABASE_CLIENT__ = supabaseClient
-    console.log('💾 Supabase client stored in window for hot reload protection')
   }
 }
 
-console.log('🚀 Supabase client ready for use')
 export const supabase = supabaseClient
