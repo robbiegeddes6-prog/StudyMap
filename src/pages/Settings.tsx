@@ -1,7 +1,9 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { useAuth } from "@/hooks/useAuth";
+import { useStripeCheckout } from "@/hooks/useStripeCheckout";
 import { PRO_MONTHLY_PRICE } from "@/lib/config";
+import { useSearchParams } from "react-router-dom";
 import {
   Settings as SettingsIcon,
   LogOut,
@@ -31,10 +33,11 @@ const Settings = () => {
   const navigate = useNavigate();
   const [visibleOnLeaderboard, setVisibleOnLeaderboard] = useState(true);
   const [subscriptionPlan, setSubscriptionPlan] = useState<"free" | "premium">(
-    "free"
+    () => localStorage.getItem("studybuddy_is_premium") === "true" ? "premium" : "free"
   );
   const [signingOut, setSigningOut] = useState(false);
-  const [processingPayment, setProcessingPayment] = useState(false);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const { startCheckout, loading: processingPayment } = useStripeCheckout();
 
   const handleSignOut = async () => {
     try {
@@ -50,26 +53,28 @@ const Settings = () => {
     }
   };
 
-  const handleSubscribe = async () => {
-    if (subscriptionPlan === "premium") {
-      toast.info("You're already a premium member! 🎉");
-      return;
-    }
-
-    try {
-      setProcessingPayment(true);
-      // Mock payment processing
-      await new Promise((resolve) => setTimeout(resolve, 1500));
-
+  // When Stripe redirects back after payment, mark user as premium
+  useEffect(() => {
+    if (searchParams.get("upgraded") === "true") {
+      localStorage.setItem("studybuddy_is_premium", "true");
       setSubscriptionPlan("premium");
-      toast.success("Welcome to Premium! 🎉", {
+      toast.success("Welcome to Premium!", {
         description: "You now have access to all AI features.",
       });
-    } catch (err) {
-      console.error("Payment failed:", err);
-      toast.error("Payment failed. Please try again.");
-    } finally {
-      setProcessingPayment(false);
+      searchParams.delete("upgraded");
+      setSearchParams(searchParams, { replace: true });
+    }
+  }, []);
+
+  const handleSubscribe = async () => {
+    if (subscriptionPlan === "premium") {
+      toast.info("You're already a premium member!");
+      return;
+    }
+    try {
+      await startCheckout();
+    } catch (err: any) {
+      toast.error("Couldn't start checkout. Please try again.");
     }
   };
 

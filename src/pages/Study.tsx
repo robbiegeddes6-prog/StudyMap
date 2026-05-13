@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { PRO_MONTHLY_PRICE } from "@/lib/config";
+import { useStripeCheckout } from "@/hooks/useStripeCheckout";
 
 // ─── Toast ──────────────────────────────────────────────────────────────────
 interface Toast { id: number; msg: string; type: string }
@@ -233,7 +234,12 @@ function AnswerBtn({ label, onClick, state }: {
   );
 }
 
-function ProModal({ open, onClose }: { open: boolean; onClose: () => void }) {
+function ProModal({ open, onClose, onUpgrade, upgrading }: {
+  open: boolean;
+  onClose: () => void;
+  onUpgrade: () => void;
+  upgrading: boolean;
+}) {
   if (!open) return null;
   return (
     <div style={{
@@ -264,7 +270,9 @@ function ProModal({ open, onClose }: { open: boolean; onClose: () => void }) {
           ))}
         </ul>
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-          <Btn variant="primary" full size="lg">✨ Upgrade to Pro — $7.99/mo</Btn>
+          <Btn variant="primary" full size="lg" onClick={onUpgrade} disabled={upgrading}>
+            {upgrading ? "Redirecting to Stripe…" : "✨ Upgrade to Pro — $7.99/mo"}
+          </Btn>
           <Btn variant="ghost" full onClick={onClose}>Maybe later</Btn>
         </div>
       </div>
@@ -372,6 +380,7 @@ type TabKey = typeof TABS[number]["key"];
 // ─── Main Component ───────────────────────────────────────────────────────────
 export default function Study() {
   const { toasts, toast } = useToast();
+  const { startCheckout, loading: checkoutLoading } = useStripeCheckout();
 
   const [tab, setTab]         = useState<TabKey>("flashcards");
   const [cards, setCards]     = useState<Flashcard[]>([]);
@@ -501,30 +510,22 @@ export default function Study() {
   // ─── Expert ───────────────────────────────────────────────────────────────
   const buildExpQs = (all: Flashcard[]): ExpertQuestion[] =>
     all.map((card) => {
-      const term    = extractTerm(card.question);
-      const correct = buildScenario(term, card.answer);
-
-      // Pull distractors from the other cards in the set — same subject domain,
-      // so they're plausible but wrong.
-      const otherCards = shuffle(all.filter((c) => c.id !== card.id));
-      const distractors = otherCards.slice(0, 3).map((other) =>
-        buildDistractor(term, other.answer)
-      );
-
-      // Pad to 3 if the deck has fewer than 4 cards total
-      while (distractors.length < 3) {
-        distractors.push(
-          buildDistractor(term, `a process that looks similar to ${term} but follows different principles`)
-        );
-      }
-
-      const options = shuffle([correct, ...distractors]);
+      const term = card.question.replace(/^(what is|define|explain)\s+/i, "").replace(/\?$/, "").trim();
+      const correct = SCENARIO_MAP[term.toLowerCase()] ?? `Someone applies ${term} in a real-world decision.`;
+      const others = shuffle([
+        ...all.filter((c) => c.id !== card.id).map((c) => {
+          const t = c.question.replace(/^(what is|define|explain)\s+/i, "").replace(/\?$/, "").trim().toLowerCase();
+          return SCENARIO_MAP[t];
+        }).filter((s): s is string => Boolean(s)),
+        ...FALLBACK_SCENARIOS,
+      ]).slice(0, 3);
+      const options = shuffle([correct, ...others]);
       return {
-        question:    `Which scenario best illustrates "${term}"?`,
+        question: `Which scenario best represents "${term}"?`,
         options,
-        correctIdx:  options.indexOf(correct),
-        selected:    null,
-        explanation: `${cap(term)}: ${card.answer}`,
+        correctIdx: options.indexOf(correct),
+        selected: null,
+        explanation: `This scenario demonstrates ${term} applied in context.`,
       };
     });
 
@@ -920,7 +921,12 @@ export default function Study() {
         )}
       </div>
 
-      <ProModal open={showPro} onClose={() => setShowPro(false)} />
+      <ProModal
+        open={showPro}
+        onClose={() => setShowPro(false)}
+        onUpgrade={async () => { try { await startCheckout(); } catch { toast("Couldn't start checkout. Try again.", "error"); } }}
+        upgrading={checkoutLoading}
+      />
       <ToastContainer toasts={toasts} />
     </DashboardLayout>
   );
