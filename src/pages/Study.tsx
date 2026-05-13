@@ -2,6 +2,8 @@ import { useState, useEffect, useCallback } from "react";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { PRO_MONTHLY_PRICE } from "@/lib/config";
 import { useStripeCheckout } from "@/hooks/useStripeCheckout";
+import { useAuth } from "@/hooks/useAuth";
+import { supabase } from "@/lib/supabaseClient";
 
 // ─── Toast ──────────────────────────────────────────────────────────────────
 interface Toast { id: number; msg: string; type: string }
@@ -80,6 +82,12 @@ interface ExpertQuestion {
   correctIdx: number;
   selected: number | null;
   explanation: string;
+}
+
+interface SavedSet {
+  id: string;
+  title: string;
+  cards: Flashcard[];
 }
 
 // ─── Design tokens ────────────────────────────────────────────────────────────
@@ -280,6 +288,63 @@ function ProModal({ open, onClose, onUpgrade, upgrading }: {
   );
 }
 
+function ReplaceConfirmModal({ open, onConfirm, onCancel }: {
+  open: boolean;
+  onConfirm: () => void;
+  onCancel: () => void;
+}) {
+  if (!open) return null;
+  return (
+    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.32)", zIndex: 1100, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
+      <div style={{ ...cardStyle, maxWidth: 380, width: "100%", padding: 28 }}>
+        <h3 style={{ margin: "0 0 10px", fontSize: 17, fontWeight: 700 }}>Replace Current Set?</h3>
+        <p style={{ margin: "0 0 20px", color: C.muted, fontSize: 13.5, lineHeight: 1.6 }}>
+          This will replace your current study set. Upgrade to Pro to save unlimited sets side by side.
+        </p>
+        <div style={{ display: "flex", gap: 8 }}>
+          <Btn variant="red" full onClick={onConfirm}>Replace Set</Btn>
+          <Btn variant="outline" full onClick={onCancel}>Cancel</Btn>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function SetSelectorModal({ open, sets, activeId, onSelect, onNewSet, onClose }: {
+  open: boolean;
+  sets: SavedSet[];
+  activeId: string | null;
+  onSelect: (id: string) => void;
+  onNewSet: () => void;
+  onClose: () => void;
+}) {
+  if (!open) return null;
+  return (
+    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.32)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
+      <div style={{ ...cardStyle, maxWidth: 420, width: "100%", position: "relative", padding: 28 }}>
+        <button onClick={onClose} style={{ position: "absolute", top: 14, right: 14, background: "none", border: "none", fontSize: 18, cursor: "pointer", color: C.light, lineHeight: 1 }}>×</button>
+        <h3 style={{ margin: "0 0 16px", fontSize: 18, fontWeight: 700 }}>Your Study Sets</h3>
+        <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 16, maxHeight: 300, overflowY: "auto" }}>
+          {sets.length === 0 ? (
+            <p style={{ color: C.muted, fontSize: 13.5, textAlign: "center", padding: "16px 0" }}>No saved sets yet. Generate cards to create your first set.</p>
+          ) : sets.map(s => (
+            <button key={s.id} onClick={() => { onSelect(s.id); onClose(); }} style={{
+              ...cardStyle, padding: "12px 16px", textAlign: "left", cursor: "pointer",
+              borderColor: s.id === activeId ? C.teal : C.border,
+              background: s.id === activeId ? C.tealLight : "#fff",
+              fontFamily: "inherit",
+            }}>
+              <div style={{ fontSize: 14, fontWeight: 600, color: C.text }}>{s.title}</div>
+              <div style={{ fontSize: 12, color: C.muted, marginTop: 2 }}>{s.cards.length} card{s.cards.length !== 1 ? "s" : ""}</div>
+            </button>
+          ))}
+        </div>
+        <Btn variant="primary" full onClick={() => { onNewSet(); onClose(); }}>+ New Study Set</Btn>
+      </div>
+    </div>
+  );
+}
+
 function ResultScreen({ icon, title, score, total, items, onRetry, onBack }: {
   icon: string;
   title: string;
@@ -381,6 +446,13 @@ type TabKey = typeof TABS[number]["key"];
 export default function Study() {
   const { toasts, toast } = useToast();
   const { startCheckout, loading: checkoutLoading } = useStripeCheckout();
+  const { user } = useAuth();
+  const [isPremium] = useState(() => localStorage.getItem("studybuddy_is_premium") === "true");
+  const [savedSets, setSavedSets] = useState<SavedSet[]>([]);
+  const [activeSetId, setActiveSetId] = useState<string | null>(null);
+  const [showReplaceConfirm, setShowReplaceConfirm] = useState(false);
+  const [pendingCards, setPendingCards] = useState<Flashcard[]>([]);
+  const [showSetManager, setShowSetManager] = useState(false);
 
   const [tab, setTab]         = useState<TabKey>("flashcards");
   const [cards, setCards]     = useState<Flashcard[]>([]);
@@ -480,16 +552,87 @@ export default function Study() {
     return () => window.removeEventListener("keydown", h);
   }, [tab, currentCard, flipCard, nextCard, prevCard, rateCard]);
 
+  // Load saved sets from Supabase for premium users
+  useEffect(() => {
+    if (!isPremium || !user) return;
+    supabase
+      .from("study_sets")
+      .select("id, title, cards, created_at")
+      .eq("user_id", user.id)
+      .order("created_at", { ascending: false })
+      .then(({ data }) => {
+        if (data && data.length > 0) {
+          const sets = data.map(s => ({ id: s.id, title: s.title, cards: s.cards as Flashcard[] }));
+          setSavedSets(sets);
+          setActiveSetId(sets[0].id);
+          setCards(sets[0].cards);
+        }
+      });
+  }, [isPremium, user?.id]);
+
+  const saveNewPremiumSet = async (newCards: Flashcard[]) => {
+    if (!user) return;
+    const title = `Study Set ${savedSets.length + 1}`;
+    const { data, error } = await supabase
+      .from("study_sets")
+      .insert({ user_id: user.id, title, cards: newCards })
+      .select("id, title")
+      .single();
+    if (!error && data) {
+      const newSet: SavedSet = { id: data.id, title: data.title, cards: newCards };
+      setSavedSets(prev => [...prev, newSet]);
+      setActiveSetId(data.id);
+    }
+    setCards(newCards);
+    setStreak(0);
+    setRawInput("");
+    toast(`✅ ${newCards.length} cards saved as "${title}"!`);
+  };
+
+  const loadSet = (id: string) => {
+    const found = savedSets.find(s => s.id === id);
+    if (found) { setActiveSetId(found.id); setCards(found.cards); setStreak(0); }
+  };
+
+  const handleProModalClose = () => {
+    setShowPro(false);
+    if (pendingCards.length > 0) setShowReplaceConfirm(true);
+  };
+
+  const handleReplaceConfirm = () => {
+    setCards(pendingCards);
+    setStreak(0);
+    setRawInput("");
+    toast(`✅ ${pendingCards.length} cards created!`);
+    setPendingCards([]);
+    setShowReplaceConfirm(false);
+  };
+
+  const handleReplaceCancel = () => {
+    setPendingCards([]);
+    setShowReplaceConfirm(false);
+  };
+
   const generate = async () => {
     if (!rawInput.trim()) { toast("Enter some text first.", "error"); return; }
     setGen(true);
     try {
       const parsed = parseCards(rawInput);
       if (!parsed.length) { toast("Use Q: / A: format on separate lines.", "error"); return; }
-      setCards(parsed);
-      setStreak(0);
-      setRawInput("");
-      toast(`✅ ${parsed.length} flashcard${parsed.length !== 1 ? "s" : ""} created!`);
+      if (!isPremium && cards.length > 0) {
+        // Free user already has a set — prompt upgrade first
+        setPendingCards(parsed);
+        setShowPro(true);
+        return;
+      }
+      if (isPremium && user) {
+        await saveNewPremiumSet(parsed);
+      } else {
+        setCards(parsed);
+        setStreak(0);
+        setRawInput("");
+        toast(`✅ ${parsed.length} flashcard${parsed.length !== 1 ? "s" : ""} created!`);
+      }
     } finally {
       setGen(false);
     }
@@ -597,7 +740,7 @@ export default function Study() {
             <p style={{ margin: "5px 0 14px", color: C.muted, fontSize: 14 }}>Master your material with interactive flashcards</p>
 
             <button
-              onClick={() => setShowPro(true)}
+              onClick={() => isPremium ? setShowSetManager(true) : setShowPro(true)}
               style={{
                 display: "inline-flex", alignItems: "center", gap: 7,
                 padding: "7px 14px", border: `1px solid ${C.border}`,
@@ -605,11 +748,13 @@ export default function Study() {
                 fontSize: 13, fontWeight: 500, cursor: "pointer", fontFamily: "inherit",
               }}
             >
-              📚 Create Multiple Study Sets
-              <span style={{
-                background: C.tealLight, color: C.teal,
-                fontSize: 10.5, fontWeight: 700, padding: "2px 8px", borderRadius: 999,
-              }}>PRO</span>
+              📚 {isPremium ? "Manage Study Sets" : "Create Multiple Study Sets"}
+              {!isPremium && (
+                <span style={{
+                  background: C.tealLight, color: C.teal,
+                  fontSize: 10.5, fontWeight: 700, padding: "2px 8px", borderRadius: 999,
+                }}>PRO</span>
+              )}
             </button>
 
             {cards.length > 0 && (
@@ -937,9 +1082,22 @@ export default function Study() {
 
       <ProModal
         open={showPro}
-        onClose={() => setShowPro(false)}
+        onClose={handleProModalClose}
         onUpgrade={async () => { try { await startCheckout(); } catch { toast("Couldn't start checkout. Try again.", "error"); } }}
         upgrading={checkoutLoading}
+      />
+      <ReplaceConfirmModal
+        open={showReplaceConfirm}
+        onConfirm={handleReplaceConfirm}
+        onCancel={handleReplaceCancel}
+      />
+      <SetSelectorModal
+        open={showSetManager}
+        sets={savedSets}
+        activeId={activeSetId}
+        onSelect={loadSet}
+        onNewSet={() => { setCards([]); setActiveSetId(null); setStreak(0); }}
+        onClose={() => setShowSetManager(false)}
       />
       <ToastContainer toasts={toasts} />
     </DashboardLayout>

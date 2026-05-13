@@ -20,6 +20,13 @@ async function getRawBody(req: any): Promise<Buffer> {
 // Disable Vercel's automatic body parsing — Stripe needs the raw bytes
 export const config = { api: { bodyParser: false } };
 
+if (!process.env.STRIPE_WEBHOOK_SECRET) {
+  console.warn('[Stripe] STRIPE_WEBHOOK_SECRET is not set.');
+  console.warn('[Stripe] Add your webhook endpoint in the Stripe Dashboard:');
+  console.warn('[Stripe]   URL: https://your-vercel-url.vercel.app/api/webhook');
+  console.warn('[Stripe]   Events: checkout.session.completed, customer.subscription.deleted');
+}
+
 export default async function handler(req: any, res: any) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });

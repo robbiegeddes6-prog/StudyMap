@@ -4,6 +4,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useStripeCheckout } from "@/hooks/useStripeCheckout";
 import { PRO_MONTHLY_PRICE } from "@/lib/config";
 import { useSearchParams } from "react-router-dom";
+import { supabase } from "@/lib/supabaseClient";
 import {
   Settings as SettingsIcon,
   LogOut,
@@ -58,11 +59,20 @@ const Settings = () => {
     if (searchParams.get("upgraded") === "true") {
       localStorage.setItem("studybuddy_is_premium", "true");
       setSubscriptionPlan("premium");
-      toast.success("Welcome to Premium!", {
-        description: "You now have access to all AI features.",
+      toast.success("🎉 Welcome to StudyMap Pro!", {
+        description: "You now have access to all premium features.",
       });
       searchParams.delete("upgraded");
       setSearchParams(searchParams, { replace: true });
+      if (user?.id) {
+        supabase
+          .from("profiles")
+          .update({ is_premium: true })
+          .eq("id", user.id)
+          .then(({ error }) => {
+            if (error) console.error("Failed to update profile:", error.message);
+          });
+      }
     }
   }, []);
 
