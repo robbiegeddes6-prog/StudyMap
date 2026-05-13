@@ -101,6 +101,8 @@ function normalizeText(input: string) {
   return input.trim().replace(/\s+/g, " ").toLowerCase();
 }
 
+const roundToTen = (minutes: number): number => Math.round(minutes / 10) * 10;
+
 function formatDateISO(date: Date): string {
   return format(date, "yyyy-MM-dd");
 }
@@ -619,7 +621,7 @@ export function generateStudyPlan(task: {
       id: `session-${Date.now()}-${dayIndex}`,
       subject,
       title,
-      duration: sessionMinutes,
+      duration: roundToTen(sessionMinutes),
       date: formatDateISO(sessionDate),
     });
   }
@@ -636,7 +638,7 @@ export function generateStudyPlan(task: {
           id: `session-${Date.now()}-urgent-${0}`,
           subject,
           title: `Urgent Start ${task.title || "Study Session"} – ${formatSessionDuration(minutesToMove)}`,
-          duration: minutesToMove,
+          duration: roundToTen(minutesToMove),
           date: formatDateISO(startDate),
         });
       } else {
@@ -649,13 +651,6 @@ export function generateStudyPlan(task: {
         });
       }
     }
-  }
-
-  // Ensure total minutes are exact.
-  const allocated = sessions.reduce((sum, session) => sum + session.duration, 0);
-  if (allocated !== totalMinutes && sessions.length > 0) {
-    const diff = totalMinutes - allocated;
-    sessions[sessions.length - 1].duration = Math.max(30, sessions[sessions.length - 1].duration + diff);
   }
 
   return sessions;
@@ -726,15 +721,9 @@ function generateAggressiveDistribution(
       id: `session-aggressive-${Date.now()}-${dayIndex}`,
       subject,
       title,
-      duration: sessionMinutes,
+      duration: roundToTen(sessionMinutes),
       date: formatDateISO(sessionDate),
     });
-  }
-
-  const allocated = sessions.reduce((sum, s) => sum + s.duration, 0);
-  if (allocated !== totalMinutes && sessions.length > 0) {
-    const diff = totalMinutes - allocated;
-    sessions[sessions.length - 1].duration = Math.max(45, sessions[sessions.length - 1].duration + diff);
   }
 
   return sessions;
@@ -828,7 +817,7 @@ export function generateStudySchedule(task: {
     id: session.id,
     taskId: task.id,
     title: session.title || `Study ${title} – ${(session.duration / 60).toFixed(1)}h`,
-    duration: session.duration,
+    duration: roundToTen(session.duration),
     date: new Date(session.date),
     completed: false,
   })) || [];

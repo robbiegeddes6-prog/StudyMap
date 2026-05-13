@@ -9,6 +9,7 @@ export function useStripeCheckout() {
     if (!user) throw new Error('Not signed in');
     setLoading(true);
     try {
+      console.log('[Stripe] Starting checkout', { userId: user.id, userEmail: user.email });
       const res = await fetch('/api/create-checkout-session', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

@@ -417,6 +417,20 @@ export default function Study() {
   }, [cards]);
 
   useEffect(() => {
+    localStorage.setItem("studymap_flashcard_streak", String(streak));
+  }, [streak]);
+
+  useEffect(() => {
+    if (testDone && testQs.length > 0) {
+      const pct = Math.round((testScore / testQs.length) * 100);
+      localStorage.setItem(
+        "studymap_quiz_result",
+        JSON.stringify({ pct, timestamp: Date.now() })
+      );
+    }
+  }, [testDone, testScore, testQs.length]);
+
+  useEffect(() => {
     setLearnQ([...cards]);
     setCardIdx(0);
     setFlipped(false);

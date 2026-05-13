@@ -1,22 +1,30 @@
 import { useState, useEffect, createContext, useContext } from "react";
+import { supabase } from "@/lib/supabaseClient";
+import type { Session } from "@supabase/supabase-js";
 
-interface User {
+interface AuthUser {
   id: string;
   email: string;
   display_name?: string;
 }
 
-interface Session {
-  user: User;
-}
-
 interface AuthContextType {
-  session: Session | null;
-  user: User | null;
+  session: { user: AuthUser } | null;
+  user: AuthUser | null;
   loading: boolean;
   signOut: () => Promise<void>;
   signIn: (email: string, password: string) => Promise<void>;
   signUp: (email: string, password: string, displayName?: string) => Promise<void>;
+}
+
+function toAuthUser(supabaseUser: NonNullable<Session["user"]>): AuthUser {
+  return {
+    id: supabaseUser.id,
+    email: supabaseUser.email ?? "",
+    display_name:
+      (supabaseUser.user_metadata?.display_name as string | undefined) ??
+      supabaseUser.email?.split("@")[0],
+  };
 }
 
 const AuthContext = createContext<AuthContextType>({
@@ -28,80 +36,47 @@ const AuthContext = createContext<AuthContextType>({
   signUp: async () => {},
 });
 
-const AUTH_STORAGE_KEY = 'studybuddy_auth_user';
-
 export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
-  const [session, setSession] = useState<Session | null>(null);
+  const [session, setSession] = useState<{ user: AuthUser } | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Load user from localStorage on mount
-    const loadUser = () => {
-      try {
-        const storedUser = localStorage.getItem(AUTH_STORAGE_KEY);
-        if (storedUser) {
-          const user = JSON.parse(storedUser);
-          setSession({ user });
-        }
-      } catch (error) {
-        console.error('Error loading user from localStorage:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
+    supabase.auth.getSession().then(({ data: { session: s } }) => {
+      setSession(s ? { user: toAuthUser(s.user) } : null);
+      setLoading(false);
+    });
 
-    loadUser();
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, s) => {
+      setSession(s ? { user: toAuthUser(s.user) } : null);
+    });
+
+    return () => subscription.unsubscribe();
   }, []);
 
   const signIn = async (email: string, password: string) => {
-    // Simple mock authentication - in a real app, you'd validate against a backend
-    if (!email || !password) {
-      throw new Error("Email and password are required");
-    }
-
-    // Create a mock user
-    const user: User = {
-      id: `user_${Date.now()}`,
-      email: email,
-      display_name: email.split('@')[0],
-    };
-
-    // Store in localStorage
-    localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(user));
-    setSession({ user });
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    if (error) throw error;
   };
 
   const signUp = async (email: string, password: string, displayName?: string) => {
-    if (!email || !password) {
-      throw new Error("Email and password are required");
-    }
-
-    // Create a mock user
-    const user: User = {
-      id: `user_${Date.now()}`,
-      email: email,
-      display_name: displayName || email.split('@')[0],
-    };
-
-    // Store in localStorage
-    localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(user));
-    setSession({ user });
+    const { error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: { data: { display_name: displayName || email.split("@")[0] } },
+    });
+    if (error) throw error;
   };
 
   const signOut = async () => {
-    localStorage.removeItem(AUTH_STORAGE_KEY);
-    setSession(null);
+    await supabase.auth.signOut();
   };
 
   return (
-    <AuthContext.Provider value={{
-      session,
-      user: session?.user ?? null,
-      loading,
-      signOut,
-      signIn,
-      signUp
-    }}>
+    <AuthContext.Provider
+      value={{ session, user: session?.user ?? null, loading, signIn, signUp, signOut }}
+    >
       {children}
     </AuthContext.Provider>
   );
