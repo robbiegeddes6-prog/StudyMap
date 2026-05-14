@@ -1,4 +1,4 @@
-import Anthropic from "@anthropic-ai/sdk";
+import { GoogleGenerativeAI } from "@google/generative-ai";
 
 const SYSTEM_PROMPT = `You are a university syllabus parser. Extract ALL assignments, exams, quizzes and assessments from the following syllabus text. Return ONLY a JSON array with no markdown or backticks in this exact format:
 [
@@ -22,23 +22,20 @@ export default async function handler(req: any, res: any) {
     return res.status(400).json({ error: "content is required" });
   }
 
-  const apiKey = process.env.ANTHROPIC_API_KEY;
+  const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) {
-    return res.status(500).json({ error: "ANTHROPIC_API_KEY not configured", tasks: [] });
+    return res.status(500).json({ error: "GEMINI_API_KEY not configured", tasks: [] });
   }
 
-  const anthropic = new Anthropic({ apiKey });
+  const genAI = new GoogleGenerativeAI(apiKey);
+  const model = genAI.getGenerativeModel({
+    model: "gemini-1.5-flash",
+    systemInstruction: SYSTEM_PROMPT,
+  });
 
   try {
-    const message = await anthropic.messages.create({
-      model: "claude-haiku-4-5-20251001",
-      max_tokens: 4096,
-      system: SYSTEM_PROMPT,
-      messages: [{ role: "user", content: content.slice(0, 40000) }],
-    });
-
-    const responseText =
-      message.content[0]?.type === "text" ? message.content[0].text : "";
+    const result = await model.generateContent(content.slice(0, 40000));
+    const responseText = result.response.text();
 
     // Strip any accidental markdown code fences
     const cleaned = responseText
@@ -58,7 +55,7 @@ export default async function handler(req: any, res: any) {
         .json({ tasks: [], error: "Could not parse AI response" });
     }
   } catch (err: any) {
-    console.error("Anthropic API error:", err?.message);
+    console.error("Gemini API error:", err?.message);
     return res
       .status(500)
       .json({ error: "Failed to parse syllabus", tasks: [] });
