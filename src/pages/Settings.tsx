@@ -12,6 +12,7 @@ import {
   Zap,
   CheckCircle2,
   Loader2,
+  Star,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
@@ -30,12 +31,9 @@ import {
 import { useNavigate } from "react-router-dom";
 
 const Settings = () => {
-  const { user, signOut } = useAuth();
+  const { user, signOut, isPremium, setIsPremium } = useAuth();
   const navigate = useNavigate();
   const [visibleOnLeaderboard, setVisibleOnLeaderboard] = useState(true);
-  const [subscriptionPlan, setSubscriptionPlan] = useState<"free" | "premium">(
-    () => localStorage.getItem("studybuddy_is_premium") === "true" ? "premium" : "free"
-  );
   const [signingOut, setSigningOut] = useState(false);
   const [searchParams, setSearchParams] = useSearchParams();
   const { startCheckout, loading: processingPayment } = useStripeCheckout();
@@ -54,36 +52,44 @@ const Settings = () => {
     }
   };
 
-  // When Stripe redirects back after payment, mark user as premium
+  // Handle Stripe success redirect: ?upgraded=true
   useEffect(() => {
-    if (searchParams.get("upgraded") === "true") {
-      localStorage.setItem("studybuddy_is_premium", "true");
-      setSubscriptionPlan("premium");
-      toast.success("🎉 Welcome to StudyMap Pro!", {
-        description: "You now have access to all premium features.",
-      });
-      searchParams.delete("upgraded");
-      setSearchParams(searchParams, { replace: true });
-      if (user?.id) {
-        supabase
-          .from("profiles")
-          .update({ is_premium: true })
-          .eq("id", user.id)
-          .then(({ error }) => {
-            if (error) console.error("Failed to update profile:", error.message);
-          });
-      }
+    if (searchParams.get("upgraded") !== "true") return;
+
+    // Clear the param immediately so refresh doesn't re-trigger
+    const next = new URLSearchParams(searchParams);
+    next.delete("upgraded");
+    setSearchParams(next, { replace: true });
+
+    // Update Supabase profile
+    if (user?.id) {
+      supabase
+        .from("profiles")
+        .update({ is_premium: true })
+        .eq("id", user.id)
+        .then(({ error }) => {
+          if (error) console.error("Failed to update profile:", error.message);
+        });
     }
-  }, []);
+
+    // Update local auth state + localStorage
+    setIsPremium(true);
+    localStorage.setItem("studybuddy_is_premium", "true");
+
+    toast.success("🎉 Welcome to StudyMap Pro!", {
+      description: "You now have access to all premium features.",
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
 
   const handleSubscribe = async () => {
-    if (subscriptionPlan === "premium") {
-      toast.info("You're already a premium member!");
+    if (isPremium) {
+      toast.info("You're already a Pro member!");
       return;
     }
     try {
       await startCheckout();
-    } catch (err: any) {
+    } catch {
       toast.error("Couldn't start checkout. Please try again.");
     }
   };
@@ -173,19 +179,19 @@ const Settings = () => {
               <div className="flex items-center gap-2 mb-1">
                 <Zap className="w-5 h-5 text-primary" />
                 <h3 className="font-semibold text-foreground">Subscription</h3>
-                {subscriptionPlan === "premium" && (
+                {isPremium && (
                   <span className="text-xs px-2 py-1 rounded-full bg-primary text-primary-foreground">
                     Premium
                   </span>
                 )}
               </div>
               <p className="text-sm text-muted-foreground mb-4">
-                {subscriptionPlan === "premium"
+                {isPremium
                   ? "You have access to all AI features including Quick Add, Auto Scheduler, and File Upload."
                   : "Upgrade to unlock AI-powered study scheduling, Quick Add, and file analysis."}
               </p>
 
-              {subscriptionPlan === "free" && (
+              {!isPremium && (
                 <div className="bg-white/5 rounded-lg p-3 mb-4 border border-border/50">
                   <p className="text-sm font-medium text-foreground mb-2">
                     Free Plan Includes:
@@ -207,7 +213,7 @@ const Settings = () => {
                 </div>
               )}
 
-              {subscriptionPlan === "premium" && (
+              {isPremium && (
                 <div className="bg-white/5 rounded-lg p-3 mb-4 border border-primary/50">
                   <p className="text-sm font-medium text-foreground mb-2">
                     Premium Features:
@@ -237,30 +243,31 @@ const Settings = () => {
               <div className="text-right mb-4">
                 <p className="text-2xl font-bold text-foreground">
                   {PRO_MONTHLY_PRICE}
-                  <span className="text-sm text-muted-foreground font-normal">
-                    /mo
-                  </span>
+                  <span className="text-sm text-muted-foreground font-normal">/mo</span>
                 </p>
               </div>
-              <Button
-                onClick={handleSubscribe}
-                disabled={processingPayment || subscriptionPlan === "premium"}
-                className="w-full"
-              >
-                {processingPayment ? (
-                  <>
-                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                    Processing...
-                  </>
-                ) : subscriptionPlan === "premium" ? (
-                  <>
-                    <CheckCircle2 className="w-4 h-4 mr-2" />
-                    Active
-                  </>
-                ) : (
-                  "Upgrade Now"
-                )}
-              </Button>
+
+              {isPremium ? (
+                <Button disabled className="w-full bg-primary/20 text-primary border border-primary/30">
+                  <Star className="w-4 h-4 mr-2" />
+                  Pro Member ✓
+                </Button>
+              ) : (
+                <Button
+                  onClick={handleSubscribe}
+                  disabled={processingPayment}
+                  className="w-full"
+                >
+                  {processingPayment ? (
+                    <>
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      Processing...
+                    </>
+                  ) : (
+                    "Upgrade Now"
+                  )}
+                </Button>
+              )}
             </div>
           </div>
         </motion.div>
@@ -281,8 +288,7 @@ const Settings = () => {
             <AlertDialogContent>
               <AlertDialogTitle>Sign Out?</AlertDialogTitle>
               <AlertDialogDescription>
-                You'll be logged out of your StudyMap account. You can sign back in
-                anytime.
+                You'll be logged out of your StudyMap account. You can sign back in anytime.
               </AlertDialogDescription>
               <div className="flex gap-3 justify-end">
                 <AlertDialogCancel>Cancel</AlertDialogCancel>
@@ -315,8 +321,8 @@ const Settings = () => {
           <div>
             <h3 className="font-semibold text-foreground mb-2">About StudyMap</h3>
             <p className="text-sm text-muted-foreground mb-3">
-              StudyMap is an AI-powered study planner that helps you schedule
-              smarter, study harder, and never miss a deadline.
+              StudyMap is an AI-powered study planner that helps you schedule smarter, study harder,
+              and never miss a deadline.
             </p>
             <div className="space-y-1 text-xs text-muted-foreground">
               <p>Version: 1.0.0</p>

@@ -15,12 +15,22 @@ import { parseQuickAdd, generateStudySchedule, cleanTaskTitle } from "@/lib/stud
 import { SharedTaskType, useTaskContext } from "@/context/TaskContext";
 import { TASK_TYPE_LABELS } from "@/types";
 
+// Maps mode → default spread days (determines session count)
+const MODE_SPREAD_DAYS: Record<string, number> = {
+  light: 2,    // 1-2 sessions
+  moderate: 4, // 3-6 sessions
+  heavy: 8,    // 7-10 sessions
+  custom: 2,
+};
+
 export function QuickInput() {
   const [input, setInput] = useState("");
   const [taskType, setTaskType] = useState<SharedTaskType>("assignment");
   const [dueDate, setDueDate] = useState("");
   const [hoursPreset, setHoursPreset] = useState("moderate");
   const [customHours, setCustomHours] = useState("");
+  const [daysBeforeStart, setDaysBeforeStart] = useState(3);
+  const [spreadDays, setSpreadDays] = useState(MODE_SPREAD_DAYS["moderate"]);
   const [loading, setLoading] = useState(false);
 
   const { addTask, tasks } = useTaskContext();
@@ -31,11 +41,16 @@ export function QuickInput() {
       return isNaN(hours) ? 4 : hours;
     }
     switch (hoursPreset) {
-      case "light": return 4; // 3-5 hours
-      case "moderate": return 8; // 6-10 hours
-      case "heavy": return 15; // 10-20 hours
+      case "light": return 4;
+      case "moderate": return 8;
+      case "heavy": return 15;
       default: return 4;
     }
+  };
+
+  const handleModeChange = (mode: string) => {
+    setHoursPreset(mode);
+    setSpreadDays(MODE_SPREAD_DAYS[mode] ?? 2);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -44,7 +59,7 @@ export function QuickInput() {
 
     setLoading(true);
     try {
-      const parsed = parseQuickAdd(input, taskType, "medium"); // Keep for backward compatibility
+      const parsed = parseQuickAdd(input, taskType, "medium");
       const dueDateObj = new Date(dueDate);
       if (isNaN(dueDateObj.getTime())) {
         toast.error("Invalid due date");
@@ -52,18 +67,21 @@ export function QuickInput() {
       }
 
       const totalHours = getTotalHours();
+      const taskId =
+        typeof crypto !== "undefined" && "randomUUID" in crypto
+          ? crypto.randomUUID()
+          : `${Date.now()}-${Math.random()}`;
 
-      // Generate study plan with sessions
-      const taskId = typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`;
       const schedule = generateStudySchedule({
         id: taskId,
         title: cleanTaskTitle(input),
         type: taskType,
         dueDate: dueDateObj,
         totalHours,
+        daysBeforeStart,
+        spreadDays,
       });
 
-      // Use cleanTaskTitle for the task
       const cleanTitle = cleanTaskTitle(input);
 
       const task = {
@@ -75,7 +93,7 @@ export function QuickInput() {
         completed: false,
         studySessions: schedule.map((s) => ({
           id: s.id,
-          taskId: taskId,
+          taskId,
           title: s.title,
           duration: s.duration,
           date: s.date,
@@ -87,15 +105,13 @@ export function QuickInput() {
 
       const daysUntilDue = Math.max(
         0,
-        Math.round(
-          (dueDateObj.getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24)
-        )
+        Math.round((dueDateObj.getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24))
       );
 
       console.log("🔧 Quick Add: New task created", { newTask: task, allTasks: tasks });
 
       toast.success(`✅ "${cleanTitle}" added!`, {
-        description: `${TASK_TYPE_LABELS[taskType]} · ${totalHours}h · Due in ${daysUntilDue} day${daysUntilDue !== 1 ? "s" : ""}`,
+        description: `${TASK_TYPE_LABELS[taskType]} · ${totalHours}h · ${schedule.length} session${schedule.length !== 1 ? "s" : ""} · Due in ${daysUntilDue} day${daysUntilDue !== 1 ? "s" : ""}`,
       });
 
       setInput("");
@@ -103,8 +119,11 @@ export function QuickInput() {
       setDueDate("");
       setHoursPreset("moderate");
       setCustomHours("");
+      setDaysBeforeStart(3);
+      setSpreadDays(MODE_SPREAD_DAYS["moderate"]);
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : "Failed to process. Please try again.";
+      const errorMessage =
+        err instanceof Error ? err.message : "Failed to process. Please try again.";
       console.error("Error:", err);
       toast.error(errorMessage);
     } finally {
@@ -122,7 +141,9 @@ export function QuickInput() {
           </div>
           <div>
             <h3 className="text-lg font-semibold text-foreground">Quick Add Task</h3>
-            <p className="text-sm text-muted-foreground max-w-2xl">Create a task and schedule it instantly with one simple form.</p>
+            <p className="text-sm text-muted-foreground max-w-2xl">
+              Create a task and schedule it instantly with one simple form.
+            </p>
           </div>
         </div>
         <div className="rounded-2xl border border-border bg-muted/50 px-4 py-3 text-sm text-muted-foreground">
@@ -169,15 +190,15 @@ export function QuickInput() {
             </div>
 
             <div className="space-y-2">
-              <Label className="text-xs text-muted-foreground">Study Hours</Label>
-              <Select value={hoursPreset} onValueChange={setHoursPreset}>
+              <Label className="text-xs text-muted-foreground">Study Load</Label>
+              <Select value={hoursPreset} onValueChange={handleModeChange}>
                 <SelectTrigger className="h-11 text-sm">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="light">Light (3–5 H)</SelectItem>
-                  <SelectItem value="moderate">Moderate (6–10 H)</SelectItem>
-                  <SelectItem value="heavy">Heavy (10–20 H)</SelectItem>
+                  <SelectItem value="light">Light (1–2 sessions)</SelectItem>
+                  <SelectItem value="moderate">Moderate (3–6 sessions)</SelectItem>
+                  <SelectItem value="heavy">Heavy (7–10 sessions)</SelectItem>
                   <SelectItem value="custom">Custom Hours</SelectItem>
                 </SelectContent>
               </Select>
@@ -200,7 +221,45 @@ export function QuickInput() {
           </div>
         )}
 
-        <Button type="submit" disabled={!input.trim() || !dueDate || loading} className="w-full">
+        {/* Per-task scheduling preferences */}
+        <div className="grid gap-3 sm:grid-cols-2 pt-1 border-t border-border/50">
+          <div className="space-y-2">
+            <Label className="text-xs text-muted-foreground">
+              Days before due date to start
+            </Label>
+            <Input
+              type="number"
+              value={daysBeforeStart}
+              onChange={(e) =>
+                setDaysBeforeStart(Math.max(1, parseInt(e.target.value) || 1))
+              }
+              min="1"
+              disabled={loading}
+              className="h-11"
+            />
+          </div>
+          <div className="space-y-2">
+            <Label className="text-xs text-muted-foreground">
+              Spread work across how many days
+            </Label>
+            <Input
+              type="number"
+              value={spreadDays}
+              onChange={(e) =>
+                setSpreadDays(Math.max(1, parseInt(e.target.value) || 1))
+              }
+              min="1"
+              disabled={loading}
+              className="h-11"
+            />
+          </div>
+        </div>
+
+        <Button
+          type="submit"
+          disabled={!input.trim() || !dueDate || loading}
+          className="w-full"
+        >
           {loading ? (
             <>
               <Loader2 className="w-4 h-4 mr-2 animate-spin" />

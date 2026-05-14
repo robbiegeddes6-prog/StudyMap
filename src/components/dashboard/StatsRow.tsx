@@ -1,17 +1,50 @@
 import { motion } from "framer-motion";
 import { Clock, Flame, Target, BookCheck } from "lucide-react";
-
-const stats = [
-  { label: "Study Hours", value: "12.5", icon: Clock, suffix: "hrs this week" },
-  { label: "Streak", value: "7", icon: Flame, suffix: "days" },
-  { label: "Completion", value: "68%", icon: Target, suffix: "of sessions" },
-  { label: "Exams Ready", value: "2/4", icon: BookCheck, suffix: "above 75%" },
-];
+import { useUserStatsContext } from "@/context/UserStatsContext";
+import { useTaskContext } from "@/context/TaskContext";
 
 export function StatsRow() {
+  const { stats, loading } = useUserStatsContext();
+  const { tasks } = useTaskContext();
+
+  const totalSessions = tasks.reduce((sum, t) => sum + t.studySessions.length, 0);
+  const completedSessions = tasks.reduce(
+    (sum, t) => sum + t.studySessions.filter((s) => s.completed).length,
+    0
+  );
+  const completionRate =
+    totalSessions > 0 ? Math.round((completedSessions / totalSessions) * 100) : 0;
+
+  const examTasks = tasks.filter((t) => t.type === "exam");
+  const readyExams = examTasks.filter((t) => {
+    const total = t.studySessions.length;
+    const done = t.studySessions.filter((s) => s.completed).length;
+    return total > 0 && done / total >= 0.75;
+  }).length;
+
+  const hoursDisplay = loading
+    ? "--"
+    : stats.total_study_hours > 0
+    ? stats.total_study_hours.toFixed(1)
+    : "0";
+
+  const streakDisplay = loading ? "--" : String(stats.current_streak);
+
+  const statsData = [
+    { label: "Study Hours", value: hoursDisplay, icon: Clock, suffix: "hrs total" },
+    { label: "Streak", value: streakDisplay, icon: Flame, suffix: "days" },
+    { label: "Completion", value: `${completionRate}%`, icon: Target, suffix: "of sessions" },
+    {
+      label: "Exams Ready",
+      value: examTasks.length > 0 ? `${readyExams}/${examTasks.length}` : "--",
+      icon: BookCheck,
+      suffix: "above 75%",
+    },
+  ];
+
   return (
     <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-      {stats.map((stat, i) => (
+      {statsData.map((stat, i) => (
         <motion.div
           key={stat.label}
           initial={{ opacity: 0, y: 10 }}

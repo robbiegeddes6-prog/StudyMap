@@ -5,6 +5,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider, useAuth } from "@/hooks/useAuth";
 import { TaskProvider, useTaskContext } from "@/context/TaskContext";
 import { TimerProvider } from "@/context/TimerContext";
+import { UserStatsProvider } from "@/context/UserStatsContext";
 import Index from "./pages/Index";
 import Auth from "./pages/Auth";
 import Calendar from "./pages/Calendar";
@@ -56,11 +57,13 @@ class ErrorBoundary extends Component<{ children: React.ReactNode }, { hasError:
 
 function AppProviders({ children }: { children: React.ReactNode }) {
   return (
-    <TaskProvider>
-      <TimerProviderWithTaskContext>
-        {children}
-      </TimerProviderWithTaskContext>
-    </TaskProvider>
+    <UserStatsProvider>
+      <TaskProvider>
+        <TimerProviderWithTaskContext>
+          {children}
+        </TimerProviderWithTaskContext>
+      </TaskProvider>
+    </UserStatsProvider>
   );
 }
 

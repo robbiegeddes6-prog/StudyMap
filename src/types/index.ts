@@ -1,5 +1,5 @@
 // Task and Study Session Types
-export type TaskType = "assignment" | "exam" | "quiz" | "project" | "study";
+export type TaskType = "assignment" | "exam" | "quiz" | "project" | "study" | "other";
 export type Difficulty = "easy" | "medium" | "hard";
 export type Subject = "math" | "biology" | "physics" | "chemistry" | "english" | "history" | "art" | "other";
 
@@ -20,6 +20,7 @@ export const TASK_TYPE_LABELS: Record<TaskType, string> = {
   quiz: "Quiz",
   project: "Project",
   study: "Study",
+  other: "Other",
 };
 
 export const DIFFICULTY_COLORS: Record<Difficulty, string> = {

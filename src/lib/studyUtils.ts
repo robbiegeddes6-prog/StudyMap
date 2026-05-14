@@ -453,13 +453,8 @@ export interface StudySessionPlan {
 
 /**
  * Generate study plan with proper session distribution.
- * Rules:
- * - Easy: 3-5 hours total (use 4 as default)
- * - Medium: 6-10 hours total (use 8 as default)
- * - Hard: 10-20+ hours total (use 15 as default)
- * 
  * Distribution:
- * - Spread across ALL available days
+ * - Spread across available days (limited by daysBeforeStart and spreadDays)
  * - Increasing intensity closer to due date
  * - One session per day, with duration increasing
  * - If late (few days), compress into longer sessions
@@ -470,6 +465,8 @@ export function generateStudyPlan(task: {
   dueDate: string | Date;
   title?: string;
   difficulty?: DifficultyKey | "easy" | "medium" | "hard";
+  daysBeforeStart?: number;
+  spreadDays?: number;
 }): StudySession[] {
   const subject = task.subject || "Other";
   const totalHours = task.totalHours || 4; // Default to 4 hours
@@ -494,16 +491,17 @@ export function generateStudyPlan(task: {
   // If due date passed, treat as today to maintain plan visibility.
   const normalizedDueDate = isBefore(dueDate, today) ? today : dueDate;
 
-  // Calculate earliest allowed start date (14 days before due date)
+  const windowDays = task.daysBeforeStart ?? 14;
   const earliestStartDate = new Date(normalizedDueDate);
-  earliestStartDate.setDate(earliestStartDate.getDate() - 14);
+  earliestStartDate.setDate(earliestStartDate.getDate() - windowDays);
 
-  // Start date is the later of today and earliestStartDate
   const startDate = new Date(Math.max(today.getTime(), earliestStartDate.getTime()));
 
-  // Days from startDate (inclusive) to due date (inclusive)
   const daysDiff = differenceInDays(normalizedDueDate, startDate);
-  const daysAvailable = Math.max(1, daysDiff + 1);
+  const rawDaysAvailable = Math.max(1, daysDiff + 1);
+  const daysAvailable = task.spreadDays
+    ? Math.min(rawDaysAvailable, task.spreadDays)
+    : rawDaysAvailable;
 
   // Calculate total minutes and guard against non-positive values.
   const totalMinutes = Math.max(0, Math.round(totalHours * 60));
@@ -771,10 +769,12 @@ function getIntensityLabel(intensity: "low" | "medium" | "high"): string {
 export function generateStudySchedule(task: {
   id: string;
   title: string;
-  type: "assignment" | "exam";
+  type: string;
   dueDate: Date | string;
   totalHours: number;
   difficulty?: DifficultyKey | "easy" | "medium" | "hard";
+  daysBeforeStart?: number;
+  spreadDays?: number;
 }): Array<{
   id: string;
   taskId: string;
@@ -803,13 +803,14 @@ export function generateStudySchedule(task: {
     return [];
   }
 
-  // Generate the plan
   const plan = generateStudyPlan({
     subject,
     totalHours: task.totalHours,
     dueDate: dueDateStr,
     title,
     difficulty: task.difficulty,
+    daysBeforeStart: task.daysBeforeStart,
+    spreadDays: task.spreadDays,
   });
 
   // Convert to standardized session objects

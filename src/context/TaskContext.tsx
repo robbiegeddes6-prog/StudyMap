@@ -2,8 +2,9 @@ import React, { createContext, useContext, useState, useMemo, useCallback, useEf
 import { generateStudyPlan, generateStudySchedule, calculateTaskUrgency, generateAICoachSummary, redistributeMissedSessions, UrgencyLevel } from "@/lib/studyUtils";
 import { createTask, getTasks } from "@/lib/tasks";
 import { useAuth } from "@/hooks/useAuth";
+import { useUserStatsContext } from "@/context/UserStatsContext";
 
-export type SharedTaskType = "exam" | "assignment" | "quiz" | "project" | "study";
+export type SharedTaskType = "exam" | "assignment" | "quiz" | "project" | "study" | "other";
 
 export interface StudySessionItem {
   id: string;
@@ -69,6 +70,7 @@ export const TaskProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [weakTopics, setWeakTopics] = useState<WeakTopic[]>([]);
   const [isLoaded, setIsLoaded] = useState(false);
   const { user } = useAuth();
+  const { incrementSessionCompleted } = useUserStatsContext();
 
   // Load tasks when user changes or on mount
   useEffect(() => {
@@ -265,15 +267,18 @@ export const TaskProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (task.id !== taskId) return task;
         return {
           ...task,
-          studySessions: task.studySessions.map((session) =>
-            session.id === sessionId
-              ? { ...session, completed: !session.completed }
-              : session
-          ),
+          studySessions: task.studySessions.map((session) => {
+            if (session.id !== sessionId) return session;
+            const nowComplete = !session.completed;
+            if (nowComplete) {
+              incrementSessionCompleted(session.duration);
+            }
+            return { ...session, completed: nowComplete };
+          }),
         };
       })
     );
-  }, []);
+  }, [incrementSessionCompleted]);
 
   const getTodayStudySessions = useCallback(() => {
     const today = new Date();

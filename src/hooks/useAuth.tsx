@@ -12,6 +12,8 @@ interface AuthContextType {
   session: { user: AuthUser } | null;
   user: AuthUser | null;
   loading: boolean;
+  isPremium: boolean;
+  setIsPremium: (value: boolean) => void;
   signOut: () => Promise<void>;
   signIn: (email: string, password: string) => Promise<void>;
   signUp: (email: string, password: string, displayName?: string) => Promise<void>;
@@ -27,10 +29,25 @@ function toAuthUser(supabaseUser: NonNullable<Session["user"]>): AuthUser {
   };
 }
 
+async function fetchIsPremium(userId: string): Promise<boolean> {
+  try {
+    const { data } = await supabase
+      .from("profiles")
+      .select("is_premium")
+      .eq("id", userId)
+      .maybeSingle();
+    return !!data?.is_premium;
+  } catch {
+    return false;
+  }
+}
+
 const AuthContext = createContext<AuthContextType>({
   session: null,
   user: null,
   loading: true,
+  isPremium: false,
+  setIsPremium: () => {},
   signOut: async () => {},
   signIn: async () => {},
   signUp: async () => {},
@@ -39,17 +56,30 @@ const AuthContext = createContext<AuthContextType>({
 export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [session, setSession] = useState<{ user: AuthUser } | null>(null);
   const [loading, setLoading] = useState(true);
+  const [isPremium, setIsPremium] = useState(false);
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session: s } }) => {
+    supabase.auth.getSession().then(async ({ data: { session: s } }) => {
       setSession(s ? { user: toAuthUser(s.user) } : null);
+      if (s?.user) {
+        const premium = await fetchIsPremium(s.user.id);
+        setIsPremium(premium);
+        localStorage.setItem("studybuddy_is_premium", String(premium));
+      }
       setLoading(false);
     });
 
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, s) => {
+    } = supabase.auth.onAuthStateChange(async (_event, s) => {
       setSession(s ? { user: toAuthUser(s.user) } : null);
+      if (s?.user) {
+        const premium = await fetchIsPremium(s.user.id);
+        setIsPremium(premium);
+        localStorage.setItem("studybuddy_is_premium", String(premium));
+      } else {
+        setIsPremium(false);
+      }
     });
 
     return () => subscription.unsubscribe();
@@ -71,11 +101,13 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
   const signOut = async () => {
     await supabase.auth.signOut();
+    setIsPremium(false);
+    localStorage.removeItem("studybuddy_is_premium");
   };
 
   return (
     <AuthContext.Provider
-      value={{ session, user: session?.user ?? null, loading, signIn, signUp, signOut }}
+      value={{ session, user: session?.user ?? null, loading, isPremium, setIsPremium, signIn, signUp, signOut }}
     >
       {children}
     </AuthContext.Provider>
