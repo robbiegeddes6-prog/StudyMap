@@ -1,4 +1,3 @@
-import { GoogleGenerativeAI } from "@google/generative-ai";
 
 const SYSTEM_PROMPT = `You are a university syllabus parser. Extract ALL assignments, exams, quizzes and assessments from the following syllabus text. Return ONLY a JSON array with no markdown or backticks in this exact format:
 [
@@ -38,16 +37,29 @@ export default async function handler(req: any, res: any) {
   const truncated = content.slice(0, 40000);
   console.log("[parse-syllabus] sending to Gemini, truncated length:", truncated.length, "| first 200 chars:", truncated.slice(0, 200));
 
-  const genAI = new GoogleGenerativeAI(apiKey);
-  const model = genAI.getGenerativeModel({
-    model: "gemini-1.5-pro",
-    systemInstruction: SYSTEM_PROMPT,
-  });
+  const prompt = `${SYSTEM_PROMPT}\n\n${truncated}`;
 
   try {
-    console.log("[parse-syllabus] calling Gemini generateContent...");
-    const result = await model.generateContent(truncated);
-    const responseText = result.response.text();
+    console.log("[parse-syllabus] calling Gemini via direct fetch...");
+    const response = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${apiKey}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: prompt }] }],
+        }),
+      }
+    );
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      console.error("[parse-syllabus] Gemini fetch error:", JSON.stringify(data));
+      throw new Error(`Gemini error: ${response.status}`);
+    }
+
+    const responseText: string = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
     console.log("[parse-syllabus] Gemini raw response length:", responseText.length, "| first 500 chars:", responseText.slice(0, 500));
 
     // Strip any accidental markdown code fences
